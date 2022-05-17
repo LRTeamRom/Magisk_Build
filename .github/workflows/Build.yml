@@ -47,7 +47,7 @@ jobs:
 
     - name: Set up ccache
       run: |
-        sudo apt-get install -y ccache gradle
+        sudo apt-get install -y ccache
         ln -s $(which ccache) ./ccache
         mkdir ./.ccache
         ./ccache -o compiler_check='%compiler% -dumpmachine; %compiler% -dumpversion'
