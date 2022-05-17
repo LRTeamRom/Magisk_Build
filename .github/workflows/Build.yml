@@ -52,8 +52,6 @@ jobs:
         ln -s $(which ccache) ./ccache
         mkdir ./.ccache
         ./ccache -o compiler_check='%compiler% -dumpmachine; %compiler% -dumpversion'
-        pwd
-        ls -ahl
 
     - name: Cache Gradle dependencies
       uses: actions/cache@v2
