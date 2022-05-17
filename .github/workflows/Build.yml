@@ -100,7 +100,6 @@ jobs:
       id: tag
       if: steps.compile.outputs.status == 'success'
       run: |
-        cd magisk
         echo "::set-output name=release_tag::$(curl -sL https://api.github.com/repos/topjohnwu/Magisk/commits | jq .[0].sha | sed 's/\"//g' | cut -c 1-8)"
         echo "::set-output name=release_body::$(grep "magisk.versionCode" gradle.properties | awk -F "=" '{print $2}')"
         echo "::set-output name=status::success"
