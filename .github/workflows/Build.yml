@@ -1,0 +1,125 @@
+name: Build Magisk
+
+on:
+  repository_dispatch:
+    types: [Source Code Update]
+  workflow_dispatch:
+
+env:
+  REPO_URL: https://github.com/topjohnwu/Magisk
+  REPO_BRANCH: master
+  TZ: Asia/Shanghai
+  NDK_CCACHE: ${{ github.workspace }}/ccache
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+  APP_ALLOW_MISSING_DEPS: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out
+      uses: actions/checkout@v2
+
+    - name: Initialization environment
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo timedatectl set-timezone "$TZ"
+        sudo mkdir -p /workdir
+        sudo chown $USER:$GROUPS /workdir
+
+    - name: Clone source code
+      working-directory: /workdir
+      run: |
+        df -hT $PWD
+        git clone --recurse-submodules $REPO_URL -b $REPO_BRANCH magisk
+        cp -r /workdir/magisk/* $GITHUB_WORKSPACE/
+
+    - name: Set up JDK 11
+      uses: actions/setup-java@v1
+      with:
+        java-version: '11'
+
+    - name: Set up Python 3
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Set up ccache
+      run: |
+        sudo apt-get install -y ccache gradle
+        ln -s $(which ccache) ./ccache
+        mkdir ./.ccache
+        ./ccache -o compiler_check='%compiler% -dumpmachine; %compiler% -dumpversion'
+        pwd
+        ls -ahl
+
+    - name: Cache Gradle dependencies
+      uses: actions/cache@v2
+      with:
+        path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            !~/.gradle/caches/build-cache-*
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts') }}
+        restore-keys: ${{ runner.os }}-gradle-
+
+    - name: Cache build cache
+      uses: actions/cache@v2
+      with:
+        path: |
+            ${{ github.workspace }}/.ccache
+            ~/.gradle/caches/build-cache-*
+        key: ${{ runner.os }}-build-cache-${{ github.sha }}
+        restore-keys: ${{ runner.os }}-build-cache-
+
+    - name: Set up NDK
+      run: 
+        python build.py -v ndk
+
+    - name: Build release
+      run: |
+        ./ccache -zp
+        python build.py -vr all
+
+    - name: Build debug
+      id: compile
+      run: |
+        python build.py -v all
+        ./ccache -s
+        echo "::set-output name=status::success"
+
+    - name: Stop gradle daemon
+      run: ./gradlew --stop
+
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ github.sha }}
+        path: out
+
+    - name: Generate release tag
+      id: tag
+      if: steps.compile.outputs.status == 'success'
+      run: |
+        cd magisk
+        echo "::set-output name=release_tag::$(curl -sL https://api.github.com/repos/topjohnwu/Magisk/commits | jq .[0].sha | sed 's/\"//g' | cut -c 1-8)"
+        echo "::set-output name=release_body::$(grep "magisk.versionCode" gradle.properties | awk -F "=" '{print $2}')"
+        echo "::set-output name=status::success"
+
+    - name: Upload to release
+      uses: softprops/action-gh-release@v1
+      if: steps.tag.outputs.status == 'success'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.tag.outputs.release_tag }}
+        body: ${{ steps.tag.outputs.release_body }}
+        files: out/*
+
+    - name: Delete workflow runs
+      uses: Mattraks/delete-workflow-runs@main
+      with:
+        retain_days: 0
+        keep_minimum_runs: 1
