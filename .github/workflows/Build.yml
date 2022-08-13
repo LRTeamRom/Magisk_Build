@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  REPO_URL: https://github.com/topjohnwu/Magisk
+  REPO_URL: https://github.com/LRTeamRom/Magisk
   REPO_BRANCH: master
   TZ: Asia/Shanghai
   NDK_CCACHE: ${{ github.workspace }}/ccache
